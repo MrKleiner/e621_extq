@@ -35,6 +35,8 @@ For that you need:
 Once all the requirements are satisfied - run launcher.cmd, if you're on Windows.
 Or simply execute main.py if .cmd file is not an option for you.
 
+For now, when running the tool directly (through main.py) the port is hardcoded to 8089.
+
 # Compiling to .exe yourself
 Compiling to exe works out of the box, there are no any kind of special setups needed.
 
