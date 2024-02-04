@@ -198,7 +198,7 @@ class DatabaseDownloader:
 		self.wsession = wsession
 		q_session.db_cache.clear()
 		self.base_headers = {
-			'user-agent': 'BigLizard/2.73 (pierogi_z_miesem) email/izoframukaltin@yahoo.com',
+			'user-agent': 'E621 Extended Query https://github.com/MrKleiner/e621_extq',
 		}
 
 	def execute(self, *args):
