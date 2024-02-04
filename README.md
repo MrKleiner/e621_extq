@@ -2,6 +2,7 @@
 - Go to releases tab and download the latest release.
 - Place the .exe into an arbitrary folder on the fastest storage device you have (anything that doesn't has moving parts inside and is connected through USB 3.0 (if applicable). Basically - put it on an SSD)
 - Run the .exe file and do what it says. If it spits shit like "Traceback (most recent call last)", please repot this as an error.
+- If it asks "Allow python to access network" - click yes or something like that.
 - If everything goes well you should end up on a webpage, which should be quite intuitive to navigate.
 - Now look at the folder the .exe is in, there should be a file called "tag_match.py".
 - Open it as a text file, preferably with Notepad++ (pls use Notepad++, don't do it in default Windows notepad).
@@ -34,6 +35,8 @@ For that you need:
 
 Once all the requirements are satisfied - run launcher.cmd, if you're on Windows.
 Or simply execute main.py if .cmd file is not an option for you.
+
+For now, when running the tool directly (through main.py) the port is hardcoded to 8089.
 
 # Compiling to .exe yourself
 Compiling to exe works out of the box, there are no any kind of special setups needed.
