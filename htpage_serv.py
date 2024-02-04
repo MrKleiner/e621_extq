@@ -1,6 +1,6 @@
 from min_http import MinHTTP
 from pathlib import Path
-import time
+import time, sys
 
 IS_EXE = 'is_exe' == '@@NOT_EXE'
 
@@ -10,6 +10,10 @@ def devprint(*args, **kwargs):
 
 THISDIR = Path(__file__).parent
 
+if IS_EXE:
+	CUSTOM_JS_PATH = Path(sys.executable).parent / 'custom'
+else:
+	CUSTOM_JS_PATH = Path(__file__).parent / 'custom'
 
 WEB_RESOURCES_PATH = THISDIR / 'resources'
 
@@ -22,8 +26,8 @@ CDN_RESOURCE_INDEX = (
 		'application/javascript',
 	),
 	(
-		'special.js',
-		WEB_RESOURCES_PATH / 'special.js',
+		'customjs/special.js',
+		CUSTOM_JS_PATH / 'special.js',
 		'application/javascript',
 	),
 	(
