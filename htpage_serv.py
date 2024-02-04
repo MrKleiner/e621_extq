@@ -73,11 +73,14 @@ def htcallback(cl_request):
 
 	for cdn_query, fpath, mime in CDN_RESOURCE_INDEX:
 		if cdn_query in cl_request.path:
-			cl_request.flush_bytes(
-				fpath.read_bytes(),
-				mime,
-			)
-			return
+			if fpath.is_file():
+				cl_request.flush_bytes(
+					fpath.read_bytes(),
+					mime,
+				)
+				return
+			else:
+				cl_request.deny()
 
 
 	wss_url = f"""ws://127.0.0.1:{cl_request.shared_data['wss_info'][1]}"""

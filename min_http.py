@@ -28,6 +28,14 @@ class MinHTTPRequest:
 			self.headers[hkey.strip()] = hval.strip()
 
 
+	def deny(self):
+		self.cl_con.sendall('HTTP/1.1 400 Bad Request\r\n'.encode())
+		self.send_headers({
+			'Server': 'e621_extq',
+			'Connection': 'Keep-Alive',
+		})
+		self.cl_con.sendall(b'\r\n')
+
 	def send_headers(self, hdict):
 		for hkey, hval in hdict.items():
 			self.cl_con.sendall(f"""{str(hkey)}: {str(hval)}\r\n""".encode())

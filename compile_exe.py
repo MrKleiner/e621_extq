@@ -5,7 +5,7 @@ PROJECT = Path(__file__).parent
 
 TMP_DIR = PROJECT / 'tmp'
 EXE_OUT_DIR = PROJECT / 'exe_out'
-VERSION = '1-0-3'
+VERSION = '1-0-4'
 
 
 def pyinst_cleanup(base_name, src_folder, move_to):
