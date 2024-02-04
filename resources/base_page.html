@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html>
+<head>
+	<title>E621 Extended Query</title>
+	<link rel="stylesheet" href="style.css">
+</head>
+	<body wss_url="@@wss_url">
+		<dialog id="fullres_overlay">
+			<img id="fullscreen_preview_img" src="">
+			<video loop controls muted autoplay id="fullscreen_preview_video" src=""></video>
+		</dialog>
+		<header>
+			<div id="curprog">
+				<div id="curprog_text">E621 Extended Query Utility</div>
+				<div id="curprog_fill"></div>
+			</div>
+		</header>
+		<main>
+			<div id="sidebar">
+				<div class="sidebar_btn" id="dl_db_export_btn">Re-Download Export</div>
+				<div class="sidebar_btn" id="exec_query">Execute Query</div>
+
+				<div id="results_count">0/0</div>
+
+				<div id="gotopage">
+					<div class="sidebar_btn" id="gotopage_btn">Go to Page</div>
+					<input id="gotopage_input" type="text">
+				</div>
+			</div>
+
+			<div id="pool_container">
+				<div id="img_pool"></div>
+				<div id="footer">
+					<div class="pgswitch_btn" id="previous_page">
+						<img draggable="false" src="resources/icon_arrow_left.svg">
+					</div>
+					<div id="current_page_num">0</div>
+					<div class="pgswitch_btn" id="next_page">
+						<img draggable="false" src="resources/icon_arrow_right.svg">
+					</div>
+				</div>
+			</div>
+		</main>
+	</body>
+	<script src="/resources/script.js"></script>
+	<script src="/resources/special.js"></script>
+	<template id="post_entry_index">
+		<div class="post_entry">
+			<img draggable="false" class="preview_image" src="">
+			<img draggable="false" class="vis_hidden special_icon" src="">
+		</div>
+	</template>
+</html>
