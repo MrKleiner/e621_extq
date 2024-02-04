@@ -44,6 +44,9 @@ TMP_DIR.mkdir(exist_ok=True)
 (TMP_DIR / 'main.py').write_bytes(
 	(PROJECT / 'main.py').read_bytes().replace(b'@@NOT_EXE', b'is_exe')
 )
+(TMP_DIR / 'htpage_serv.py').write_bytes(
+	(PROJECT / 'htpage_serv.py').read_bytes().replace(b'@@NOT_EXE', b'is_exe')
+)
 
 
 compile_params = [
@@ -69,7 +72,7 @@ compile_params = [
 	'--add-data', str(PROJECT / 'resources;resources/'),
 
 	# Lib
-	'--add-data', str(PROJECT / 'htpage_serv.py;.'),
+	'--add-data', str(TMP_DIR / 'htpage_serv.py;.'),
 	'--add-data', str(PROJECT / 'min_http.py;.'),
 	'--add-data', str(PROJECT / 'min_wss.py;.'),
 	# '--add-data', str(TMP_DIR / 'tag_match.py;.'),

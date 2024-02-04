@@ -1,5 +1,12 @@
 from min_http import MinHTTP
 from pathlib import Path
+import time
+
+IS_EXE = 'is_exe' == '@@NOT_EXE'
+
+def devprint(*args, **kwargs):
+	if not IS_EXE:
+		print(*args, **kwargs)
 
 THISDIR = Path(__file__).parent
 
@@ -77,14 +84,29 @@ def htcallback(cl_request):
 
 
 def htserver(wss_port):
-	MinHTTP(
+	mhttp = MinHTTP(
 		htcallback,
 		{
 			'wss_info': wss_port,
-		}
+		},
+		None if IS_EXE else 8089
 	)
 
 	print('HTTP Started')
+	devprint('HTTP on', 8089)
+
+	if IS_EXE:
+		while True:
+			time.sleep(0.5)
+			if not mhttp.addr_info:
+				continue
+			print(
+				'Type this into your browser:',
+				f'http://127.0.0.1:{mhttp.addr_info[1]}'
+			)
+			break
+
+
 
 
 

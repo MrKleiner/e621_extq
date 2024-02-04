@@ -55,11 +55,11 @@ class MinHTTPRequest:
 
 
 class MinHTTP:
-	def __init__(self, callback, shared_data=None):
+	def __init__(self, callback, shared_data=None, tgt_port=None):
 		self.callback = callback
 		self.shared_data = shared_data
 		self.addr_info = None
-		threading.Thread(target=self.serve).start()
+		threading.Thread(target=self.serve, args=(tgt_port,)).start()
 
 
 	def collect_headers(self, cl_con):
@@ -90,10 +90,11 @@ class MinHTTP:
 			self.callback(http_request)
 
 
-	def serve(self):
+	def serve(self, tgt_port=None):
 		skt = socket.socket()
 		skt.bind(
-			('', 8089)
+			# ('', 8089)
+			('', tgt_port or 0)
 		)
 		skt.listen(0)
 		self.addr_info = skt.getsockname()

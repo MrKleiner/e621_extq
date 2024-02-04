@@ -23,13 +23,21 @@ def print_exception(err):
 	except Exception as e:
 		print(e)
 
-print('fpath', __file__)
+
+# print('fpath', __file__)
 
 
 # Some constants
-
 INTERNAL_RES_PATH = None
-if 'is_exe' == '@@NOT_EXE':
+IS_EXE = 'is_exe' == '@@NOT_EXE'
+
+
+def devprint(*args, **kwargs):
+	if not IS_EXE:
+		print(*args, **kwargs)
+
+
+if IS_EXE:
 	# In this case THISDIR refers to the exe location
 	THISDIR = Path(sys.executable).parent
 
@@ -39,7 +47,7 @@ if 'is_exe' == '@@NOT_EXE':
 else:
 	THISDIR = Path(__file__).parent
 
-print('Sys paths', sys.path)
+# print('Sys paths', sys.path)
 
 CACHE_DIR = THISDIR / 'data'
 
@@ -156,8 +164,9 @@ class EXTQSession:
 			with open(QCACHE_PATH, 'rb') as tgt_file:
 				self.query_cache = pickle.load(tgt_file)
 		except Exception as e:
-			print('Could not restore previous query cache')
-			print_exception(e)
+			print('No cache to read from')
+			if not IS_EXE:
+				print_exception(e)
 			self.query_cache = []
 
 	@property
@@ -366,7 +375,7 @@ class DatabaseDownloader:
 		})
 		self.wsession.send_json({
 			'cmd': 'upd_prog_text',
-			'val': 'Done unpacking'
+			'val': 'Done unpacking. You can execute queries now'
 		})
 
 
@@ -770,7 +779,7 @@ def wss_session(wsession):
 	while True:
 		try:
 			wss_msg = wsession.recv_message()
-			print('Client msg', wss_msg)
+			devprint('Client msg', wss_msg)
 			try:
 				wss_cmd = json.loads(
 					wss_msg.decode()
@@ -817,7 +826,7 @@ CMD_REGISTRY = (
 if __name__ == '__main__':
 	freeze_support()
 
-	if 'is_exe' == '@@NOT_EXE':
+	if IS_EXE:
 		if not (THISDIR / 'tag_match.py').is_file():
 			shutil.copy(
 				INTERNAL_RES_PATH / 'resources' / 'tag_match_sample.py',
