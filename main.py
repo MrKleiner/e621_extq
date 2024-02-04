@@ -727,9 +727,10 @@ class PageLister:
 		else:
 			record_idx = PAGE_OFFSET
 
-		while len(media_items) < ITEMS_PER_PAGE and record_idx <= CACHE_LEN:
+		while len(media_items) < ITEMS_PER_PAGE and record_idx <= CACHE_LEN and record_idx >= 0:
 			# todo: use [n:n] ?
 			# update: nah, quick sort would be harder then
+			# devprint('Listing', record_idx, 'out of', CACHE_LEN)
 			record = q_session.query_cache[record_idx].split(',')
 			rhash = record[3]
 			r_ext = record[11]

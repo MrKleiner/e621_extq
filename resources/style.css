@@ -138,6 +138,7 @@ main{
 	display: flex;
 	flex-wrap: wrap;
 	overflow-y: scroll;
+	place-content: flex-start;
 	/*padding-bottom: 200px;*/
 	height: 85vh;
 	flex-grow: 1;
