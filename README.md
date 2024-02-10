@@ -10,6 +10,8 @@
 - Go back to the webpage and click "Re-Download export", wait for it to finish.
 - Then click "Execute Query", wait for it to finish.
 - The results will be displayed below.
+- GIF-like posts and videos are labeled as such with an icon in the top right corner.
+- Click on an image/video to enlarge it and click again or press "Escape" to close the fullres overlay.
 
 The amount of RAM used by the tool equals to roughly 90% of the size of the database
 (as of 04-02-2024 it's almost 4GB and growing exponentially).
