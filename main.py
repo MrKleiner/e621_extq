@@ -1,5 +1,53 @@
 import multiprocessing
 from multiprocessing import freeze_support
+
+"""
+For those, who are curious, there's only one real way to make this
+POTENTIALLY run faster:
+Spawn a few processes, where each process holds a chunk of the
+databse INSIDE ITSELF. Shared lists/memory WILL NOT HELP AT ALL.
+The processes mentioned above should be connected to the main
+process via socket pipes, so that the main process can
+replace the chunks with new ones (from a freshly downloaded db)
+and tell the processes to execute a query, collecting the results later.
+There should be absolutely 0 sync between the processes,
+otherwise - they're absolutely pointless.
+Tracking the progress then becomes a little harder, but certainly doable.
+
+BONUS: Apparently, by default python only LINKS array elements, which
+are strings in this case.
+Both full database and query cache are stored in lists.
+This means, even if the the query somehow returns the entire
+database - RAM usage would never be larger than the db size,
+because python doesn't duplicate strings in this scenario.
+BUT, this will not happen with multiprocessing, which means
+the query cache now adds to the RAM usage.
+
+Another solution would be dumping hash + id into a buffer as a fixed-size struct
+This way it only takes around 200 megabytes to store the entire database...
+But then reading speeds would certainly suffer.
+And that would be the real pornography.
+
+Yes, it's possible to simply reconstruct a SQL database from the .csv file,
+but then constructing a query would become a lot harder, which is rather
+pointless in this case.
+
+Although this would soon be the only option, since the database
+is growing by around 150mb every 2 weeks.
+
+What are they gonna do once the databse size
+reaches 7, 9, 10, 15 gigabytes and so on?
+Stop providing csv exports?
+Serve exports in chunks?
+
+At this point, when are google and youtube going to start
+purging content and by which criteria?
+Not even google's custom database would survive the amount
+of data stored in it by 2040, 2050 and so on.
+UNLESS sci-fi tech becomes real...
+Fuckable aliens irl when ?
+"""
+
 import threading, socket, json, time, requests, gzip, shutil, struct, csv, importlib, pickle, math, sys
 from min_http import MinHTTP
 from min_wss import MinWSession
@@ -29,6 +77,13 @@ def print_exception(err):
 
 # Some constants
 INTERNAL_RES_PATH = None
+
+# Have a better idea?
+# Know how to achieve this without using any rubbish
+# frameworks or complex mechanisms?
+# Please comment on github.
+# (This script has to behave differently depending on
+# whether it's a compiled exe or not)
 IS_EXE = 'is_exe' == '@@NOT_EXE'
 
 
@@ -60,10 +115,12 @@ DB_PATH = CACHE_DIR / 'full_db_data.csv'
 # Path pointing to the full database, but compressed
 DB_PATH_COMPRESSED_SRC = CACHE_DIR / 'full_db_data_compressed.csv.gz'
 
-# Base URL where database exports are
+# Base URL where database exports are hosted at
 DB_DL_BASE_URL = 'https://e621.net/db_export/'
 
-# images per page
+# Images per page.
+# Could be configurable, but page switching is so fast
+# it doesn't really matter.
 ITEMS_PER_PAGE = 80
 
 # CSV module can do this automatically,
@@ -117,6 +174,9 @@ MD_VIDEO = (
 # Legends never die
 # If you're reading this - please do a minute of silence
 # in memory of Adobe Flash PLayer.
+
+# Pro tip: it's possible to download Flash player
+# as a standalone application from https://airsdk.harman.com/runtime
 MD_FLASH = (
 	'swf',
 )
@@ -131,6 +191,7 @@ MD_IMG = (
 	'avif',
 	'bmp',
 	'tiff',
+	'jfif',
 )
 
 # todo: Webp is sexy, but FUCK, webp can be both an image and animation...
@@ -148,6 +209,9 @@ MD_IMG_ANIMATED = (
 # Saving session state
 class EXTQSession:
 	def __init__(self):
+		# todo: since this class is executed in main body - 
+		# it's a very bad attitude to actually do something
+		# in __init__
 		CACHE_DIR.mkdir(exist_ok=True)
 
 		self.db_cache = []
@@ -198,7 +262,7 @@ class DatabaseDownloader:
 		self.wsession = wsession
 		q_session.db_cache.clear()
 		self.base_headers = {
-			'user-agent': 'E621 Extended Query https://github.com/MrKleiner/e621_extq',
+			'user-agent': 'E621 Extended Query "https://github.com/MrKleiner/e621_extq"',
 		}
 
 	def execute(self, *args):
@@ -337,7 +401,7 @@ class DatabaseDownloader:
 		# fuck gzip.
 		# todo: finally find a way to determine the real
 		# size of a gzip file.
-		# 7-zip does with ease...
+		# 7-zip does it with ease...
 		db_real_size = (1024**3)*4
 
 		processed_amount = 0
@@ -352,6 +416,7 @@ class DatabaseDownloader:
 				# todo: presumably, this is much more efficient
 				# shutil.copyfileobj(f_in, f_out)
 				while True:
+					# todo: what is the optimal chunk size?
 					chunk = f_in.read(1024**2)
 					if not chunk:
 						break
@@ -419,6 +484,7 @@ class ExtendedQuery:
 	def _preload_db(self, preserve_details=False):
 		"""
 		preserve_details = don't delete "source" and "description"
+		(this function is obsolete. It destroys RAM)
 		"""
 		q_session.db_cache.clear()
 
@@ -462,7 +528,17 @@ class ExtendedQuery:
 
 	def preload_db(self, preserve_details=False):
 		"""
-		preserve_details = don't delete "source" and "description"
+		preserve_details = don't delete "source" and "description".
+		Lets say 2mil (50%) posts out of 4 have a 50 character-long description.
+		(the sentence above is 72 characters long)
+		50 * 2_000_000 = 100_000_000 = 100 mb
+		This means, that 100 MB can be saved AT LEAST just by discarding
+		descriptions, which are not shown anywhere atm anyway.
+		Practically, this condition saves up to 1.5GB of RAM.
+
+		todo: Realistically, it's totally possible to only store
+		crucial data, such as md5 and image format efficiently
+		and reduce RAM usage by around 30% or maybe even 50%.
 		"""
 		q_session.db_cache.clear()
 
@@ -484,9 +560,27 @@ class ExtendedQuery:
 			for db_entry in reader:
 				if not preserve_details:
 					db_entry[4] = ''
+					# db_entry[5] = ''
+					db_entry[9] = ''
+					db_entry[13] = ''
+					db_entry[12] = ''
+					db_entry[14] = ''
 					db_entry[17] = ''
+					db_entry[19] = ''
+					db_entry[26] = ''
+					db_entry[27] = ''
+					db_entry[28] = ''
 
-				q_session.db_cache.append(','.join(db_entry))
+				if db_entry[20] != 't':
+					# Apparently, this reduces RAM usage by around 50%,
+					# while processing time is around the same as if
+					# it was a list or even a dict.
+
+					# Also, \0: Long story short:
+					# Records are cached as strings
+					# Re-parsing them is hard
+					# Don't bother, simply replace ',' with a very unique char
+					q_session.db_cache.append('\0'.join(db_entry))
 
 				processed_records += 1
 				if processed_records % 30_000 == 0:
@@ -502,9 +596,13 @@ class ExtendedQuery:
 
 	@staticmethod
 	def pipe_struct(entry_string, preserve_details=False):
-		keys = DB_STRUCT
-		values = entry_string.split(',')
-		data_dict = dict(zip(keys, values))
+		"""
+		This should only be used for immediate processing
+		and not stored anywhere.
+		"""
+		values = entry_string.split('\0')
+		# values = list(csv.reader([entry_string], dialect='excel'))[0]
+		data_dict = dict(zip(DB_STRUCT, values))
 
 		if not preserve_details:
 			data_dict['source'] = ''
@@ -512,6 +610,7 @@ class ExtendedQuery:
 
 		data_dict['tag_string_original'] = data_dict['tag_string']
 		data_dict['tag_string'] = set(data_dict['tag_string'].split(' '))
+		# print(values)
 		data_dict['score'] = int(data_dict['score'])
 
 		return data_dict
@@ -520,6 +619,8 @@ class ExtendedQuery:
 	def exec_query(self):
 		q_session.query_cache.clear()
 		if not q_session.db_cache:
+			# todo: This is a very funny joke, because it crashes the entire thing
+			# without any GUI feedback (it does show up in the console).
 			raise BufferError(
 				'The database must be precached, before query execution'
 			)
@@ -584,7 +685,9 @@ class ExtendedQuery:
 			partial_fail = False
 
 			# Discard posts with negative rating
-			# todo: make this optional
+			# todo: make this optional.
+			# This is low priority, because 99% of posts
+			# with negative rating are indeed rubbish.
 			if post['score'] < 0:
 				continue
 
@@ -614,7 +717,7 @@ class ExtendedQuery:
 
 			# How this works:
 			# A post has 3 tags:
-			# chica_(fnaf)  bony_(fnaf)  fasbear_(fnaf)
+			# chica_(fnaf)  bony_(fnaf)  applejack_(mlp)
 
 			# IF any text from below matches like this:
 			# chica_(fnaf)  bony_(fnaf)  applejack_(mlp)
@@ -623,8 +726,8 @@ class ExtendedQuery:
 
 			# Then - skip
 
-			# todo: that descirption is a lie, but it doesn't
-			# really matter
+			# todo: technically, that descirption is a lie,
+			# practically - works absolutely the same as if it was true.
 			for partial in self.tgquery['partial']:
 				if partial in post['tag_string_original']:
 					partial_fail = True
@@ -688,7 +791,7 @@ class PageLister:
 		if type(db_record) == list:
 			db_record = db_record
 		if type(db_record) == str:
-			db_record = db_record.split(',')
+			db_record = db_record.split('\0')
 
 		for ext, media_type in type_dict:
 			if db_record[11] in ext:
@@ -731,7 +834,7 @@ class PageLister:
 			# todo: use [n:n] ?
 			# update: nah, quick sort would be harder then
 			# devprint('Listing', record_idx, 'out of', CACHE_LEN)
-			record = q_session.query_cache[record_idx].split(',')
+			record = q_session.query_cache[record_idx].split('\0')
 			rhash = record[3]
 			r_ext = record[11]
 
@@ -741,6 +844,10 @@ class PageLister:
 				'preview': f'https://static1.e621.net/data/preview/{rhash[0:2]}/{rhash[2:4]}/{rhash}.jpg',
 				'fullres': f'https://static1.e621.net/data/{rhash[0:2]}/{rhash[2:4]}/{rhash}.{r_ext}',
 				'media_type': self.get_media_type(record),
+				'idx': record_idx,
+				'db_id': record[0],
+				'score': record[23],
+				'rating': record[5],
 			}
 
 			if from_latest:
@@ -759,6 +866,124 @@ class PageLister:
 			},
 		})
 
+
+class GetPostInfo:
+	wss_cmd = 'get_post_info'
+
+	def __init__(self, wsession):
+		self.wsession = wsession
+
+	def execute(self, post_idx):
+		if post_idx > (len(q_session.query_cache) - 1):
+			return
+
+		tgt_post = q_session.query_cache[post_idx].split('\0')
+
+		self.wsession.send_json({
+			'cmd': 'show_tags',
+			'val': {
+				'tags': tgt_post[8].split(' '),
+				# 'full': ExtendedQuery.pipe_struct(q_session.query_cache[post_idx]),
+				'full': {},
+				# todo: this will become onsolete once 'full' is present
+				'post_link': f'https://e621.net/posts/{tgt_post[0]}',
+			},
+		})
+
+
+
+class CacheQuickSort:
+	wss_cmd = 'quick_sort'
+
+	def __init__(self, wsession):
+		self.wsession = wsession
+
+		self.sorting_types = {
+			'score':  self.score_criteria,
+			'newest': self.newest_criteria,
+			'oldest': self.oldest_criteria,
+			'videos': self.videos_criteria,
+			'anims':  self.anims_criteria,
+			'images': self.images_criteria,
+
+			# Rating
+			'rating_s': self.rating_s_criteria,
+			'rating_q': self.rating_q_criteria,
+			'rating_e': self.rating_e_criteria,
+		}
+
+	def score_criteria(self, post_str):
+		# info = post_str.split(',')
+		# up_score, down_score = int(info[24]), int(info[25])
+		# print('Score:', up_score - down_score)
+		# return (up_score - down_score)
+		return int(post_str.split('\0')[23])
+
+	def newest_criteria(self, post_str):
+		return int(post_str.split('\0')[0])
+
+	def oldest_criteria(self, post_str):
+		return int(post_str.split('\0')[0]) * -1
+
+	def videos_criteria(self, post_str):
+		order = (
+			MD_VIDEO +
+			MD_IMG_ANIMATED +
+			MD_FLASH +
+			MD_IMG
+		)
+
+		return order.index(post_str.split('\0')[11]) * -1
+
+	def images_criteria(self, post_str):
+		order = (
+			MD_IMG +
+			MD_IMG_ANIMATED +
+			MD_FLASH +
+			MD_VIDEO
+		)
+
+		return order.index(post_str.split('\0')[11]) * -1
+
+	def anims_criteria(self, post_str):
+		order = (
+			MD_IMG_ANIMATED +
+			('webp',) +
+			MD_IMG +
+			MD_FLASH +
+			MD_VIDEO
+		)
+
+		return order.index(post_str.split('\0')[11]) * -1
+
+
+	# Rating
+	def rating_s_criteria(self, post_str):
+		order = ('s', 'q', 'e')
+		return order.index(post_str.split('\0')[5]) * -1
+
+	def rating_q_criteria(self, post_str):
+		order = ('q', 'e', 's')
+		return order.index(post_str.split('\0')[5]) * -1
+
+	def rating_e_criteria(self, post_str):
+		order = ('e', 'q', 's')
+		return order.index(post_str.split('\0')[5]) * -1
+
+
+
+	def execute(self, data):
+		tgt_func = self.sorting_types.get(data.get('sort_by'))
+
+		if not tgt_func:
+			self.wsession.send_json({
+				'cmd': 'upd_prog_text',
+				'val': f"""Minor misunderstanding: Sorting criteria "{data.get('sort_by')}" is invalid""",
+			})
+			return
+
+		q_session.query_cache.sort(key=tgt_func)
+		PageLister(self.wsession).list_page(data.get('current_page', 0))
 
 
 
@@ -821,6 +1046,8 @@ CMD_REGISTRY = (
 	DatabaseDownloader,
 	ExtendedQuery,
 	PageLister,
+	GetPostInfo,
+	CacheQuickSort,
 )
 
 

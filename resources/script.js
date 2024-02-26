@@ -1,4 +1,10 @@
 
+// Yes, it's a mess.
+// Should work via classes.
+// For now - it just works.
+// Classes will come once they're actually needed.
+
+
 window.curpage = 0;
 window.total_pages = 0;
 window.video_overlay_on = false;
@@ -56,6 +62,9 @@ document.addEventListener('keydown', evt => {
 		fullres_vid.src = '';
 		window.video_overlay_on = false;
 	}
+	if (evt.key == '1' && evt.altKey && !evt.repeat){
+		wss_con.close()
+	}
 });
 
 
@@ -69,6 +78,16 @@ const tplate_index = function(tplate_selector, idx_dict){
 	}
 
 	return indexed
+}
+
+
+const apply_attrs = function(dom_elem, attr_data){
+	for (const attr_name in attr_data){
+		dom_elem.setAttribute(
+			attr_name,
+			attr_data[attr_name]
+		)
+	}
 }
 
 
@@ -120,6 +139,45 @@ const open_fullres_overlay = function(media_url, media_type){
 }
 
 
+const show_post_info = function(data){
+	const tag_list_dom = document.querySelector('#post_info #post_info_tags');
+	tag_list_dom.innerHTML = '';
+
+	for (const tag_text of data.tags){
+		const tplate = tplate_index(
+			'#post_tag_template',
+			{
+				'tag_text': '.post_tag_entry',
+			}
+		);
+		tplate.tag_text.innerText = tag_text;
+		tag_list_dom.append(tplate.root)
+	}
+
+	link_dom = document.querySelector('#link_to_e621_page');
+	link_dom.classList.remove('vis_hidden');
+	link_dom.href = data.post_link;
+
+	/*
+	const attr_list_dom = document.querySelector('#post_info #post_into_attributes');
+	attr_list_dom.innerHTML = '';
+
+	for (const attr_label in data.attrs){
+		const tplate = tplate_index(
+			'#post_info_attribute_template',
+			{
+				'label': '.attr_label',
+				'value': '.attr_value',
+			}
+		);
+
+		tplate.label.innerText = attr_label;
+		tplate.value.innerText = data.attrs[attr_label];
+
+		attr_list_dom.append(tplate.root);
+	}
+	*/
+}
 
 
 const list_page = function(data){
@@ -146,8 +204,16 @@ const list_page = function(data){
 		);
 
 		media_tplate.preview_img.src = preview;
-		media_tplate.root.setAttribute('fullres', full);
-		media_tplate.root.setAttribute('media_type', mtype);
+		apply_attrs(
+			media_tplate.root,
+			{
+				'fullres':    full,
+				'media_type': mtype,
+				'db_id':      item.db_id,
+				'score':      item.score,
+				'rating':     item.rating,
+			}
+		)
 
 		if (mtype == 'vid'){
 			media_tplate.icon_img.src = '/resources/video_icon.svg';
@@ -165,6 +231,26 @@ const list_page = function(data){
 
 		media_tplate.root.onclick = function(){
 			open_fullres_overlay(full, mtype)
+		};
+
+		media_tplate.root.oncontextmenu = function(evt){
+			if (evt.altKey){return};
+			evt.preventDefault();
+
+			for (const rm of document.querySelectorAll('#img_pool .post_entry')){
+				rm.classList.remove('selected_post');
+			}
+
+			media_tplate.root.classList.add('selected_post');
+
+			const cmd = {
+				'cmd': 'get_post_info',
+				'val': item.idx,
+			}
+			const blob = new Blob(
+				[JSON.stringify(cmd, null, 2)]
+			);
+			wss_con.send(blob)
 		};
 
 		tgt_container.append(media_tplate.root);
@@ -204,6 +290,9 @@ wss_con.addEventListener('message', async function(event){
 	}
 	if (msg.cmd == 'upd_hit_count'){
 		update_hit_count(msg.val)
+	}
+	if (msg.cmd == 'show_tags'){
+		show_post_info(msg.val)
 	}
 });
 
@@ -267,7 +356,6 @@ document.querySelector('#previous_page').onclick = function(){
 }
 
 
-
 document.querySelector('#gotopage_btn').onclick = function(){
 	const input_val = document.querySelector('#gotopage_input').value;
 	if (!input_val){
@@ -287,5 +375,44 @@ document.querySelector('#gotopage_btn').onclick = function(){
 	);
 	wss_con.send(blob)
 }
+
+
+const bind_sortings = function(){
+
+	const sort_dict = {
+		'#sort_by_rating': 'score',
+		'#sort_by_newest': 'newest',
+		'#sort_by_oldest': 'oldest',
+		'#sort_by_videos': 'videos',
+		'#sort_by_anims':  'anims',
+		'#sort_by_images': 'images',
+
+		// Rating
+		'#sort_by_rating_s': 'rating_s',
+		'#sort_by_rating_q': 'rating_q',
+		'#sort_by_rating_e': 'rating_e',
+	}
+
+	for (const selector in sort_dict){
+		const criteria = sort_dict[selector];
+
+		document.querySelector(selector).onclick = function(){
+			const cmd = {
+				'cmd': 'quick_sort',
+				'val': {
+					'sort_by':      criteria,
+					'current_page': window.curpage,
+				},
+			}
+			const blob = new Blob(
+				[JSON.stringify(cmd, null, 2)]
+			);
+			wss_con.send(blob)
+		}
+	}
+
+}
+
+bind_sortings()
 
 

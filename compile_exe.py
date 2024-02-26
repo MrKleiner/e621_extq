@@ -5,7 +5,7 @@ PROJECT = Path(__file__).parent
 
 TMP_DIR = PROJECT / 'tmp'
 EXE_OUT_DIR = PROJECT / 'exe_out'
-VERSION = '1-0-4'
+VERSION = '1-1-56'
 
 
 def pyinst_cleanup(base_name, src_folder, move_to):
@@ -88,6 +88,11 @@ pyinst_cleanup(
 	'main',
 	PROJECT,
 	EXE_OUT_DIR / f'e621_extq_{VERSION}.exe'
+)
+
+shutil.copy(
+	EXE_OUT_DIR / f'e621_extq_{VERSION}.exe',
+	EXE_OUT_DIR / 'e621_extq_latest.exe'
 )
 
 

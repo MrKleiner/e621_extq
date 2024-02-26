@@ -48,6 +48,7 @@ main{
 	width: 100%;
 	height: 100%;
 	background: #152f56;
+	overflow: hidden;
 }
 
 #sidebar{
@@ -60,6 +61,11 @@ main{
 	flex-shrink: 0;
 
 	z-index: 20;
+
+	max-height: 100%;
+	/*height: 50%;*/
+
+	overflow: hidden;
 }
 
 
@@ -325,5 +331,203 @@ main{
 	font-size: 30px;
 }
 
+#post_info{
+	width: 100%;
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	flex-grow: 0;
+
+	overflow-y: scroll;
+
+	margin-top: 15px;
+	/*max-height: 50%;*/
+}
+
+#post_info #post_info_tags{
+	margin-top: 5px;
+	padding: 0px 10px 10px 10px;
+	display: flex;
+	flex-direction: column;
+	flex-grow: 0;
+
+	width: -webkit-fill-available;
+}
+
+#post_info #post_info_tags .post_tag_entry{
+	color: #ffffff8f;
+}
+
+
+
+
+/*
+======================================
+Imagine how hard it was back in 2000s
+======================================
+*/
+
+
+
+/* Mozilla (fuck you) */
+[subtle_scrollbar]{
+	scrollbar-width: thin;
+	scrollbar-color: rgba(255, 255, 255, 0.3) rgba(0, 0, 0, 0.0);
+}
+
+[subtle_scrollbar]::-moz-scrollbar,
+[subtle_scrollbar]::-moz-scrollbar:horizontal
+{
+	width: 5px;
+	height: 5px;
+	background: rgba(0, 0, 0, 0.0);
+}
+
+[subtle_scrollbar]::-moz-scrollbar-track,
+[subtle_scrollbar]::-moz-scrollbar-track:horizontal
+{
+	border-radius: 999px;
+	/*box-shadow: inset 0 0 6px rgba(0, 0, 0, 0.3);*/
+}
+
+[subtle_scrollbar]::-moz-scrollbar-thumb,
+[subtle_scrollbar]::-moz-scrollbar-thumb:horizontal
+{
+	border-radius: 999px;
+	background-color: rgba(255, 255, 255, 0.3);
+	/*background-color: rgb(60, 60, 60);*/
+	/*outline: 1px solid slategrey; */
+	/*border-radius: 10px;*/
+}
+
+[subtle_scrollbar]::-moz-scrollbar-corner
+{
+	border-radius: 999px;
+	background-color: rgba(0, 0, 0, 0.5);
+}
+
+
+
+
+/* Chromium */
+[subtle_scrollbar]::-webkit-scrollbar,
+[subtle_scrollbar]::-webkit-scrollbar:horizontal
+{
+	width: 5px;
+	height: 5px;
+	background: rgba(0, 0, 0, 0.0);
+}
+
+[subtle_scrollbar]::-webkit-scrollbar-track,
+[subtle_scrollbar]::-webkit-scrollbar-track:horizontal
+{
+	border-radius: 999px;
+	/*box-shadow: inset 0 0 6px rgba(0, 0, 0, 0.3);*/
+}
+
+[subtle_scrollbar]::-webkit-scrollbar-thumb,
+[subtle_scrollbar]::-webkit-scrollbar-thumb:horizontal
+{
+	border-radius: 999px;
+	background-color: rgba(255, 255, 255, 0.3);
+	/*background-color: rgb(60, 60, 60);*/
+	/*outline: 1px solid slategrey; */
+	/*border-radius: 10px;*/
+}
+
+[subtle_scrollbar]::-webkit-scrollbar-corner
+{
+	border-radius: 999px;
+	background-color: rgba(0, 0, 0, 0.5);
+}
+
+
+
+
+
+
+
+
+
+
+
+
+#quick_sorting{
+	margin-top: 20px;
+	display: flex;
+	flex-direction: column;
+	width: 90%;
+	outline: 1px solid rgba(255, 255, 255, 0.3);
+
+	padding-bottom: 10px;
+}
+
+#quick_sorting_header{
+	width: 100%;
+	display: flex;
+	justify-content: center;
+	align-items: center;
+	padding-top: 5px;
+	color: white;
+	user-select: none;
+	font-weight: 900;
+}
+
+#quick_sorting_types{
+	display: grid;
+	grid-template-columns: repeat(2, 45%);
+	grid-auto-rows: auto;
+	justify-content: space-around;
+	justify-content: space-evenly;
+}
+
+#quick_sorting_types .sidebar_btn{
+	width: auto !important;
+}
+
+
+#sort_by_rating_content{
+	display: flex;
+	flex-direction: row;
+}
+
+#sort_by_rating_header{
+	margin-top: 10px;
+	display: flex;
+	justify-content: center;
+	align-items: center;
+	user-select: none;
+	color: white;
+	font-weight: 900;
+}
+
+
+#post_into_attributes{
+	color: white;
+	display: flex;
+	flex-direction: column;
+}
+
+
+.selected_post{
+	outline: 1px solid rgba(180, 255, 250, 0.45);
+	outline-offset: 3px;
+}
+
+/*#link_to_e621_page{
+	display: flex;
+	width: 70%;
+	justify-content: center;
+	align-items: center;
+	padding: 5px 0px 5px 0px;
+	font-size: 17px;
+	color: #75cfd2;
+	text-decoration: none;
+}*/
+
+#link_to_e621_page{
+	width: auto !important;
+	text-decoration: none;
+}
 
 

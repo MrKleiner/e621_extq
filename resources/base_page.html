@@ -1,9 +1,10 @@
 <!DOCTYPE html>
 <html>
-<head>
-	<title>E621 Extended Query</title>
-	<link rel="stylesheet" href="style.css">
-</head>
+	<head>
+		<title>E621 Extended Query</title>
+		<link rel="stylesheet" href="style.css">
+	</head>
+
 	<body wss_url="@@wss_url">
 		<dialog id="fullres_overlay">
 			<img id="fullscreen_preview_img" src="">
@@ -19,12 +20,36 @@
 			<div id="sidebar">
 				<div class="sidebar_btn" id="dl_db_export_btn">Re-Download Export</div>
 				<div class="sidebar_btn" id="exec_query">Execute Query</div>
+				<div id="quick_sorting">
+					<div id="quick_sorting_header">Sort By</div>
+					<div id="quick_sorting_types">
+						<div class="sidebar_btn" id="sort_by_newest">Newest</div>
+						<div class="sidebar_btn" id="sort_by_oldest">Oldest</div>
+						<div class="sidebar_btn" id="sort_by_rating">Score</div>
+						<div class="sidebar_btn" id="sort_by_videos">Videos</div>
+						<div class="sidebar_btn" id="sort_by_anims">Anims</div>
+						<div class="sidebar_btn" id="sort_by_images">Images</div>
+						<div id="sort_by_rating_header">Rating:</div>
+						<div id="sort_by_rating_content">
+							<div class="sidebar_btn" id="sort_by_rating_e">E</div>
+							<div class="sidebar_btn" id="sort_by_rating_q">Q</div>
+							<div class="sidebar_btn" id="sort_by_rating_s">S</div>
+						</div>
+					</div>
+				</div>
+
 
 				<div id="results_count">0/0</div>
 
 				<div id="gotopage">
 					<div class="sidebar_btn" id="gotopage_btn">Go to Page</div>
 					<input id="gotopage_input" type="text">
+				</div>
+
+				<a class="vis_hidden sidebar_btn" id="link_to_e621_page" target="_blank" href="#">View On E621</a>
+
+				<div subtle_scrollbar id="post_info">
+					<div id="post_info_tags"></div>
 				</div>
 			</div>
 
@@ -42,12 +67,25 @@
 			</div>
 		</main>
 	</body>
-	<script src="/resources/script.js"></script>
-	<script src="/customjs/special.js"></script>
+
 	<template id="post_entry_index">
 		<div class="post_entry">
 			<img draggable="false" class="preview_image" src="">
 			<img draggable="false" class="vis_hidden special_icon" src="">
 		</div>
 	</template>
+
+	<template id="post_tag_template">
+		<div class="post_tag_entry"></div>
+	</template>
+
+	<template id="post_info_attribute_template">
+		<div class="post_info_attr">
+			<div class="attr_label"></div>
+			<div class="attr_value"></div>
+		</div>
+	</template>
+
+	<script defer src="/resources/script.js"></script>
+	<script defer src="/customjs/special.js"></script>
 </html>
