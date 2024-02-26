@@ -13,8 +13,14 @@
 - GIF-like posts and videos are labeled as such with an icon in the top right corner.
 - Click on an image/video to enlarge it and click again or press "Escape" to close the fullres overlay.
 
-The amount of RAM used by the tool equals to roughly 90% of the size of the database
-(as of 04-02-2024 it's almost 4GB and growing exponentially).
+You can quickly sort the reults with the corresponding buttons in the GUI.
+All sorting methods are additive. This means, that if you sort by Score and then
+sort by Oldest - posts will be ordered by rating from oldest to newest and so on.
+
+Click on an image to view its tags and a link to the original post.
+
+The amount of RAM used by the tool equals to roughly 50-60% of the size of the database
+(as of 04-02-2024 the database is almost 4GB and growing exponentially).
 Although this is only true when actively performing queries.
 If you perform a query, close the software and open it again -
 the amount of RAM used will be the size of the cached query (usually a few hundred megabytes at most).
