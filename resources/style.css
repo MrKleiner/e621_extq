@@ -352,6 +352,7 @@ main{
 	flex-grow: 0;
 
 	width: -webkit-fill-available;
+	width: -moz-available;
 }
 
 #post_info #post_info_tags .post_tag_entry{
