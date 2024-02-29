@@ -571,6 +571,11 @@ class ExtendedQuery:
 					db_entry[27] = ''
 					db_entry[28] = ''
 
+				# todo: Deleted posts are kinda useless.
+				# Nobody's gonna bother fucking with trying to figure
+				# out deleted posts' source n shit.
+				# Is skipping such posts a good idea?
+				# There are around 500k of deleted posts...
 				if db_entry[20] != 't':
 					# Apparently, this reduces RAM usage by around 50%,
 					# while processing time is around the same as if
@@ -595,18 +600,17 @@ class ExtendedQuery:
 		})
 
 	@staticmethod
-	def pipe_struct(entry_string, preserve_details=False):
+	def pipe_struct(entry_string):
 		"""
 		This should only be used for immediate processing
 		and not stored anywhere.
 		"""
-		values = entry_string.split('\0')
+		# values = entry_string.split('\0')
 		# values = list(csv.reader([entry_string], dialect='excel'))[0]
-		data_dict = dict(zip(DB_STRUCT, values))
-
-		if not preserve_details:
-			data_dict['source'] = ''
-			data_dict['description'] = ''
+		# todo: zipping adds 1 or 2 seconds to the total processing time.
+		data_dict = dict(
+			zip(DB_STRUCT, entry_string.split('\0'))
+		)
 
 		data_dict['tag_string_original'] = data_dict['tag_string']
 		data_dict['tag_string'] = set(data_dict['tag_string'].split(' '))
@@ -692,8 +696,8 @@ class ExtendedQuery:
 				continue
 
 			# Skip deleted
-			if post['is_deleted'] == 't':
-				continue
+			# if post['is_deleted'] == 't':
+				# continue
 
 			# Execute base filters
 			if has_filter_OFTYPE:
