@@ -23,11 +23,6 @@ because python doesn't duplicate strings in this scenario.
 BUT, this will not happen with multiprocessing, which means
 the query cache now adds to the RAM usage.
 
-Another solution would be dumping hash + id into a buffer as a fixed-size struct
-This way it only takes around 200 megabytes to store the entire database...
-But then reading speeds would certainly suffer.
-And that would be the real pornography.
-
 Yes, it's possible to simply reconstruct a SQL database from the .csv file,
 but then constructing a query would become a lot harder, which is rather
 pointless in this case.
@@ -425,7 +420,7 @@ class DatabaseDownloader:
 
 					# todo: is this really needed?
 					# why not simply read in huge chunks?
-					if processed_amount % (1024**2)*32 == 0:
+					if (processed_amount % ((1024**2)*45)) == 0:
 						self.wsession.send_json({
 							'cmd': 'update_progress',
 							'val': processed_amount / db_real_size,
@@ -553,10 +548,14 @@ class ExtendedQuery:
 		total_records = 4_000_000
 		processed_records = 0
 
+
 		with open(DB_PATH, 'r', encoding='utf-8') as db_data:
 			csv.field_size_limit(1024**2)
 			reader = csv.reader(db_data, dialect='excel')
+
+			# First line is column names. Not needed
 			fuck = next(reader)
+
 			for db_entry in reader:
 				if not preserve_details:
 					db_entry[4] = ''
@@ -576,7 +575,9 @@ class ExtendedQuery:
 				# out deleted posts' source n shit.
 				# Is skipping such posts a good idea?
 				# There are around 500k of deleted posts...
-				if db_entry[20] != 't':
+				# todo: there are only ~70k posts with negative rating.
+				# does it really make sense to discard them like this ?
+				if db_entry[20] != 't' or (int(db_entry[23]) < 0):
 					# Apparently, this reduces RAM usage by around 50%,
 					# while processing time is around the same as if
 					# it was a list or even a dict.
@@ -692,8 +693,8 @@ class ExtendedQuery:
 			# todo: make this optional.
 			# This is low priority, because 99% of posts
 			# with negative rating are indeed rubbish.
-			if post['score'] < 0:
-				continue
+			# if post['score'] < 0:
+				# continue
 
 			# Skip deleted
 			# if post['is_deleted'] == 't':
