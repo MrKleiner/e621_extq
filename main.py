@@ -918,11 +918,12 @@ class CacheQuickSort:
 		}
 
 	def score_criteria(self, post_str):
-		# info = post_str.split(',')
+		# info = post_str.split('\0')
 		# up_score, down_score = int(info[24]), int(info[25])
 		# print('Score:', up_score - down_score)
 		# return (up_score - down_score)
 		return int(post_str.split('\0')[23])
+		# return int(info[23]) + int(info[0])
 
 	def newest_criteria(self, post_str):
 		return int(post_str.split('\0')[0])

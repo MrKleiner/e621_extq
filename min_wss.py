@@ -1,5 +1,11 @@
 import hashlib, base64, struct, io, collections, json
 
+try:
+	from xor_cipher import cyclic_xor
+	print('WSS v2')
+except Exception as e:
+	cyclic_xor = None
+
 
 def clamp_num(num, tgt_min, tgt_max):
 	return max(tgt_min, min(num, tgt_max))
@@ -12,13 +18,25 @@ class WSSMask:
 		self.bytes_static = mask_bytes
 		self.bytes = collections.deque(list(mask_bytes))
 
-	def unmask(self, data, mask):
+		self.cyclic_xor = None
+
+		# todo: mention this in the manual
+		if cyclic_xor:
+			self.cyclic_xor = cyclic_xor
+			self.unmask = self.unmask_xcipher
+		else:
+			self.unmask = unmask_native
+			self.cyclic_xor = None
+
+	def unmask_native(self, data, mask):
 		bt_array = bytearray(data)
 		for idx in range(len(bt_array)):
 			bt_array[idx] ^= mask[idx % 4]
 
 		return bytes(bt_array)
 
+	def unmask_xcipher(self, data, mask):
+		return self.cyclic_xor(data, mask)
 
 	def apply(self, data):
 		xored = self.unmask(data, bytes(self.bytes))
