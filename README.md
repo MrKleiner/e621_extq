@@ -12,6 +12,7 @@
 - The results will be displayed below.
 - GIF-like posts and videos are labeled as such with an icon in the top right corner.
 - Click on an image/video to enlarge it and click again or press "Escape" to close the fullres overlay.
+- Press `Ctrl + S` to save the current search results, page number and search results order
 
 You can quickly sort the reults with the corresponding buttons in the GUI.
 
