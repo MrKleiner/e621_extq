@@ -382,6 +382,7 @@ class EXTQ:
 		)
 
 	def run(self):
+		CACHE_DIR.mkdir(exist_ok=True)
 		# The HTTP server needs to know the socket WSS is running on,
 		# before launching
 		wss_skt = socket.socket()
