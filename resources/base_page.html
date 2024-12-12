@@ -11,14 +11,15 @@
 			<video loop controls muted autoplay id="fullscreen_preview_video" src=""></video>
 		</dialog>
 		<header>
+			<div id="curprog_text">E621 Extended Query Utility</div>
 			<div id="curprog">
-				<div id="curprog_text">E621 Extended Query Utility</div>
-				<div id="curprog_fill"></div>
+				<div id="curprog_fill" class="prog_glow"></div>
 			</div>
+			<div id="chunked_prog"></div>
 		</header>
 		<main>
 			<div id="sidebar">
-				<div class="sidebar_btn" id="dl_db_export_btn">Re-Download Export</div>
+				<div class="sidebar_btn" id="dl_db_export_btn">Re-Download</div>
 				<div class="sidebar_btn" id="exec_query">Execute Query</div>
 				<div id="quick_sorting">
 					<div id="quick_sorting_header">Sort By</div>
@@ -83,6 +84,12 @@
 		<div class="post_info_attr">
 			<div class="attr_label"></div>
 			<div class="attr_value"></div>
+		</div>
+	</template>
+
+	<template id="progbar_chunk_tplate">
+		<div class="progbar_chunk">
+			<div class="progbar_chunk_prog prog_glow"></div>
 		</div>
 	</template>
 

@@ -4,11 +4,85 @@
 // For now - it just works.
 // Classes will come once they're actually needed.
 
-
+window.self = null;
 window.curpage = 0;
 window.total_pages = 0;
 window.video_overlay_on = false;
+window.chunk_bars = [];
 
+
+
+const remap_cls = function(self){
+	const prop_names = Object.getOwnPropertyNames(self.constructor.prototype);
+
+	for (const func_name of prop_names){
+		if ( (func_name == 'constructor') || func_name.startsWith('$')){continue};
+
+		const original_func = self[func_name];
+
+		if (original_func.constructor.name == 'AsyncFunction'){
+			self[func_name] = async function(){
+				return await original_func(self, ...arguments)
+			}
+		}
+
+		if (original_func.constructor.name == 'Function'){
+			self[func_name] = function(){
+				return original_func(self, ...arguments)
+			}
+		}
+
+		if (original_func.constructor.name == 'GeneratorFunction'){
+			self[func_name] = function(){
+				return original_func(self, ...arguments)
+			}
+		}
+	}
+
+	// Experimental: getters and setters
+	const gs_dict = {
+		// 'getters': {},
+		// 'setters': {},
+	}
+
+	for (const func_name of prop_names){
+		if ( (func_name == 'constructor') || !func_name.startsWith('$') ){continue};
+
+		const real_func_name = func_name.replaceAll('$', '');
+
+		if (!(real_func_name in gs_dict)){
+			gs_dict[real_func_name] = {};
+		}
+
+		const func = self[func_name];
+
+		if (func_name.startsWith('$$')){
+			gs_dict[real_func_name]['set'] = function(){
+				return func(self, ...arguments)
+			}
+			self[func_name] = undefined;
+			continue
+		}
+
+		if (func_name.startsWith('$')){
+			gs_dict[real_func_name]['get'] = function(){
+				return func(self, ...arguments)
+			}
+			self[func_name] = undefined;
+			continue
+		}
+	}
+
+	for (const real_func_name in gs_dict){
+		Object.defineProperty(
+			self,
+			real_func_name,
+			gs_dict[real_func_name]
+		)
+	}
+
+	return self
+}
 
 
 const toggle_btn = function(qsel, state){
@@ -40,8 +114,35 @@ const ProgressBar = class{
 	}
 }
 
+const DynamicProgBar = class{
+	constructor(filler_dom, linked_text=null){
+		const self = remap_cls(this);
+		self.filler_dom = filler_dom;
+		self.linked_text = linked_text;
 
-const progress_bar = new ProgressBar()
+		self.set_prog(0.0);
+	}
+
+	set_prog(self, prog){
+		if (prog <= 0.0){
+			self.filler_dom.classList.add('vis_hidden');
+		}else{
+			self.filler_dom.classList.remove('vis_hidden');
+		}
+
+		self.filler_dom.style.width = `${100 * prog}%`;
+	}
+
+	set_text(self, text){
+		self.linked_text.innerText = text;
+	}
+}
+
+
+const progress_bar = new DynamicProgBar(
+	document.querySelector('#curprog_fill'),
+	document.querySelector('#curprog_text')
+);
 const overlay_modal = document.querySelector('#fullres_overlay');
 const fullres_img = document.querySelector('#fullscreen_preview_img');
 const fullres_vid = document.querySelector('#fullscreen_preview_video');
@@ -100,7 +201,7 @@ wss_con.addEventListener('open', (event) => {
 	wss_con.send('{"cmd": "Hello"}');
 
 	const cmd = {
-		'cmd': 'list_page',
+		'cmd': 'restore_saved_page',
 		'val': window.curpage,
 	}
 	const blob = new Blob(
@@ -142,7 +243,6 @@ const open_fullres_overlay = function(media_url, media_type){
 const show_post_info = function(data){
 	const tag_list_dom = document.querySelector('#post_info #post_info_tags');
 	tag_list_dom.innerHTML = '';
-
 	for (const tag_text of data.tags){
 		const tplate = tplate_index(
 			'#post_tag_template',
@@ -260,11 +360,14 @@ const list_page = function(data){
 }
 
 
-
+const force_update_curpage = function(data){
+	window.curpage = data;
+	update_page_counter()
+}
 
 
 const update_hit_count = function(data){
-	document.querySelector('#results_count').innerText = `Hit count: ${data.items}`;
+	document.querySelector('#results_count').innerText = `Results: ${data.items}`;
 	window.total_pages = data.pages;
 	update_page_counter()
 }
@@ -274,16 +377,47 @@ const update_page_counter = function(){
 }
 
 
+const upd_progbar_count = function(count){
+	const chunk_list = document.querySelector('#chunked_prog');
+	chunk_list.innerHTML = '';
+	window.chunk_bars.length = 0;
+	let i = 0;
+	while (i < count){
+		i++;
+
+		const tplate = tplate_index(
+			'#progbar_chunk_tplate',
+			{
+				'prog': '.progbar_chunk_prog',
+			}
+		);
+
+		window.chunk_bars.push(
+			new DynamicProgBar(tplate.prog)
+		);
+		chunk_list.append(tplate.root);
+	}
+}
+
+const update_chunked_progress = function(data){
+	window.chunk_bars[data.idx].set_prog(data.prog);
+}
+
+const lock_gui = function(state){
+
+}
+
+
 wss_con.addEventListener('message', async function(event){
 	// console.log('Message from server', event.data);
 	const msg = JSON.parse(await event.data.text());
 	console.log('recv msg:', msg)
 
-	if (msg.cmd == 'update_progress'){
-		progress_bar.set_prog(100 * msg.val)
+	if (msg.cmd == 'update_global_progress'){
+		progress_bar.set_prog(msg.val)
 	}
 	if (msg.cmd == 'upd_prog_text'){
-		progress_bar.set_bar_text(msg.val)
+		progress_bar.set_text(msg.val)
 	}
 	if (msg.cmd == 'list_page'){
 		list_page(msg.val)
@@ -294,12 +428,26 @@ wss_con.addEventListener('message', async function(event){
 	if (msg.cmd == 'show_tags'){
 		show_post_info(msg.val)
 	}
+	if (msg.cmd == 'show_tags'){
+		show_post_info(msg.val)
+	}
+	if (msg.cmd == 'upd_progbar_count'){
+		upd_progbar_count(msg.val)
+	}
+	if (msg.cmd == 'update_chunked_progress'){
+		update_chunked_progress(msg.val)
+	}
+	if (msg.cmd == 'force_update_curpage'){
+		force_update_curpage(msg.val)
+	}
 });
 
 
 document.querySelector('#dl_db_export_btn').onclick = function(){
+	document.querySelector('#chunked_prog').innerHTML = '';
+	document.querySelector('#img_pool').innerHTML = '';
 	const cmd = {
-		'cmd': 'dl_db_export_btn',
+		'cmd': 'recook_db',
 	}
 	const blob = new Blob(
 		[JSON.stringify(cmd, null, 2)]
@@ -309,6 +457,8 @@ document.querySelector('#dl_db_export_btn').onclick = function(){
 
 
 document.querySelector('#exec_query').onclick = function(){
+	document.querySelector('#img_pool').innerHTML = '';
+
 	const cmd = {
 		'cmd': 'exec_query',
 	}
@@ -375,6 +525,24 @@ document.querySelector('#gotopage_btn').onclick = function(){
 	);
 	wss_con.send(blob)
 }
+
+
+
+document.addEventListener('keydown', evt => {
+	if (evt.repeat){return};
+	if (evt.which == 83 && evt.ctrlKey){
+		evt.preventDefault();
+
+		const cmd = {
+			'cmd': 'save_game',
+			'val': window.curpage,
+		}
+		const blob = new Blob(
+			[JSON.stringify(cmd, null, 2)]
+		);
+		wss_con.send(blob)
+	}
+});
 
 
 const bind_sortings = function(){

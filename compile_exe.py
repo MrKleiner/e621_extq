@@ -5,7 +5,7 @@ PROJECT = Path(__file__).parent
 
 TMP_DIR = PROJECT / 'tmp'
 EXE_OUT_DIR = PROJECT / 'exe_out'
-VERSION = '1-1-56'
+VERSION = '2-1-15'
 
 
 def pyinst_cleanup(base_name, src_folder, move_to):
@@ -67,6 +67,10 @@ compile_params = [
 	'--exclude-module', 'htpage_serv',
 	'--exclude-module', 'min_http',
 	'--exclude-module', 'min_wss',
+	'--exclude-module', 'db_sys',
+
+	# Manually add some modules
+	'--hidden-import', 'xor_cipher',
 
 	# Resource folder
 	'--add-data', str(PROJECT / 'resources;resources/'),
@@ -75,6 +79,7 @@ compile_params = [
 	'--add-data', str(TMP_DIR / 'htpage_serv.py;.'),
 	'--add-data', str(PROJECT / 'min_http.py;.'),
 	'--add-data', str(PROJECT / 'min_wss.py;.'),
+	'--add-data', str(PROJECT / 'db_sys.py;.'),
 	# '--add-data', str(TMP_DIR / 'tag_match.py;.'),
 
 	# Base script

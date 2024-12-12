@@ -14,8 +14,6 @@
 - Click on an image/video to enlarge it and click again or press "Escape" to close the fullres overlay.
 
 You can quickly sort the reults with the corresponding buttons in the GUI.
-All sorting methods are additive. This means, that if you sort by Score and then
-sort by Oldest - posts will be ordered by rating from oldest to newest and so on.
 
 Click on an image to view its tags and a link to the original post.
 

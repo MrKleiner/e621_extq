@@ -65,6 +65,11 @@ CDN_RESOURCE_INDEX = (
 		WEB_RESOURCES_PATH / 'icon_arrow_left.svg',
 		'image/svg+xml',
 	),
+	(
+		'resources/alphabet.ttf',
+		WEB_RESOURCES_PATH / 'alphabet.ttf',
+		'image/svg+xml',
+	),
 )
 
 

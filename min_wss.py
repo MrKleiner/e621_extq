@@ -1,10 +1,13 @@
 import hashlib, base64, struct, io, collections, json
+from queue import Queue
+import threading
 
 try:
 	from xor_cipher import cyclic_xor
 	print('WSS v2')
 except Exception as e:
 	cyclic_xor = None
+
 
 
 def clamp_num(num, tgt_min, tgt_max):
@@ -25,7 +28,7 @@ class WSSMask:
 			self.cyclic_xor = cyclic_xor
 			self.unmask = self.unmask_xcipher
 		else:
-			self.unmask = unmask_native
+			self.unmask = self.unmask_native
 			self.cyclic_xor = None
 
 	def unmask_native(self, data, mask):
@@ -45,14 +48,61 @@ class WSSMask:
 
 
 
+class TaskQueue:
+	def __init__(self, pg):
+		self.queue = Queue()
+		self.lock = threading.Lock()
+		self.worker_thread = None
+		self.running = False
+
+		self.pg = pg
+
+	def add_task(self, task_data):
+		"""Adds task data to the queue and starts processing if not already running."""
+		self.queue.put(task_data)
+		with self.lock:
+			if not self.running:
+				self.running = True
+				self.worker_thread = threading.Thread(target=self._process_queue)
+				self.worker_thread.daemon = True
+				self.worker_thread.start()
+
+	def _process_queue(self):
+		"""Processes tasks in the queue one by one."""
+		while not self.queue.empty():
+			task_data = self.queue.get()
+			try:
+				self._process_task(task_data)
+			except Exception as e:
+				print(f"Error while processing task: {e}")
+			finally:
+				self.queue.task_done()
+		with self.lock:
+			self.running = False
+
+	def _process_task(self, task):
+		task()
+
+
+
 class MinWSession:
 	def __init__(self, cl_con):
 		self.cl_con = cl_con
+		self.tq = TaskQueue(self)
+
 		try:
 			self.resolve_handshake()
 		except Exception as e:
 			print(e)
-		
+
+	@staticmethod
+	def sched(method):
+		def wrap(self, *args, **kwargs):
+			self.tq.add_task(
+				lambda: method(self, *args, **kwargs)
+			)
+
+		return wrap
 
 	# aligned_receive
 	def aligned_recv(self, bufsize, chunk_size=8192):
@@ -91,7 +141,6 @@ class MinWSession:
 
 		return buf
 
-
 	def resolve_handshake(self):
 		skt_file = self.cl_con.makefile('rb', newline=b'\r\n', buffering=0)
 		hlist = []
@@ -127,7 +176,6 @@ class MinWSession:
 			self.cl_con.sendall(f"""{key}: {resolve[key]}\r\n""".encode())
 		self.cl_con.sendall(b'\r\n')
 
-
 	def eval_length(self, data, strip_mask=True):
 		"""
 		Evaluate payload length from received bytes.
@@ -158,7 +206,6 @@ class MinWSession:
 			if strip_mask:
 				data = data & 0b01111111
 			return data
-
 
 	# Receive a message
 	def recv_message(self):
@@ -204,7 +251,6 @@ class MinWSession:
 
 		return msg_buf.getvalue()
 
-
 	def send_message(self, data):
 		data_len = len(data)
 		head1 = (
@@ -233,6 +279,6 @@ class MinWSession:
 		self.cl_con.sendall(header)
 		self.cl_con.sendall(data)
 
-
+	@sched
 	def send_json(self, data):
 		self.send_message(json.dumps(data).encode())
