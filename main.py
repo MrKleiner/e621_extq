@@ -189,11 +189,11 @@ def wss_session(wsession, extq):
 
 			extq.progbars.update_count()
 
-			if extq.current_page:
-				wsession.send_json({
-					'cmd': 'force_update_curpage',
-					'val': extq.current_page,
-				})
+			# if extq.current_page:
+			# 	wsession.send_json({
+			# 		'cmd': 'force_update_curpage',
+			# 		'val': extq.current_page,
+			# 	})
 		else:
 			extq.progbars.update_text(
 				'Download the database before searching'
@@ -406,8 +406,6 @@ class EXTQ:
 		http_process.start()
 
 
-
-
 class GetPostInfo:
 	wss_cmd = 'get_post_info'
 
@@ -565,6 +563,10 @@ class RestoreSavedPage:
 	def execute(self, _):
 		# print('Restoring saved page?', self.extq.current_page)
 		# if self.extq.current_page:
+		self.wsession.send_json({
+			'cmd': 'force_update_curpage',
+			'val': self.extq.current_page,
+		})
 		if self.extq._db:
 			PageLister(self.wsession, self.extq).execute(
 				self.extq.current_page or 0
