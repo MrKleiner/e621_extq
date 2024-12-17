@@ -1,3 +1,19 @@
+"""
+	Now that the speed problem has been resolved - another issue appeared:
+	The process of distributing the chunks over workers takes around 6GB of RAM
+	AND if it fails to get the required 6GB - everything crashes, which is totally
+	unacceptable.
+	The only solution, which would also future-proof this software for when the database
+	becomes too large to fit into any amount of RAM is not loading anything into RAM at all:
+	Map the database file through offsets and only store the offsets in RAM.
+	The problem with that solution is that this would only work if the database file
+	is located on a very performant NVMe SSD, because otherwise everything will be
+	slow to the point of being unusable.
+
+	For now, the alternative solution was applied:
+	Not caring. Poor people with 8GB< RAM pretty much cannot use this. 
+"""
+
 from pathlib import Path
 from datetime import datetime
 
@@ -14,6 +30,7 @@ import requests
 import gzip
 import shutil
 import csv
+import random
 
 from bs4 import BeautifulSoup as jquery
 
@@ -33,7 +50,7 @@ THISDIR = Path(__file__).parent
 # - Last session save
 # - Cooked DB
 # .lzrd files are pickled python objects
-CACHE_DIR = THISDIR / 'data'
+CACHE_DIR = THISDIR / 'test_data'
 
 # Gzipped csv file, which containes the entire DB
 DB_GZIP_CACHE_FPATH = CACHE_DIR / 'db_data_full_compressed.csv.gz'
@@ -46,6 +63,9 @@ DB_DL_BASE_URL = 'https://e621.net/db_export/'
 
 # Filepath pointing to a cooked DB
 COOKED_DB_FPATH = CACHE_DIR / 'db_cooked.lzrd'
+
+# Filepath pointing to a cooked DB
+COOKED_MFILE_DB_FPATH = CACHE_DIR / 'mfile_db_cooked.lzrd'
 
 # Filepath pointing to a cooked DB
 COOKED_TAGS_FPATH = CACHE_DIR / 'tags_cooked.lzrd'
@@ -157,6 +177,21 @@ def split_list(lst, n):
 		n = size of a single chunk.
 	"""
 	return [lst[i:i + n] for i in range(0, len(lst), n)]
+
+# Split a number into equal chunks
+def split_number(num, chunk_size):
+	# Initialize the result list
+	result = []
+	
+	# Start at 0 and iterate in steps of chunk_size
+	start = 0
+	while start < num:
+		# The distance cannot exceed the remaining value of `num`
+		distance = min(chunk_size, num - start)
+		result.append((start, distance))
+		start += chunk_size
+	
+	return result
 
 # fuck python
 # fuck it very much. Retard
@@ -279,8 +314,8 @@ def pipe_struct(entry_string):
 
 	return data_dict
 
-def create_db_chunk(pool, cmd_pipe, prog_pipe):
-	DBChunk(pool, cmd_pipe, prog_pipe).run()
+def create_db_chunk(db_type, pool, cmd_pipe, prog_pipe):
+	DBChunk(db_type, pool, cmd_pipe, prog_pipe).run()
 
 
 
@@ -321,12 +356,19 @@ class FilterCache:
 class DBChunk:
 	UPDATE_DIV = 20
 
-	def __init__(self, pool, cmd_pipe, prog_pipe):
+	def __init__(self, db_type, pool, cmd_pipe, prog_pipe):
 		self.alive = True
 		self.filter_cache = FilterCache()
 
 		# Array containing all the rows
-		self.pool = tuple(pool or [])
+		if db_type == 'ram':
+			self.pool = tuple(pool or [])
+		else:
+			self.pool = MappedFileReader(
+				COOKED_MFILE_DB_FPATH,
+				pool,
+				is_text=True
+			)
 
 		# Array containing indices pointing to elements inside .pool array,
 		# which passed filtering.
@@ -335,7 +377,7 @@ class DBChunk:
 		self.cmd_pipe = cmd_pipe
 		self.prog_pipe = prog_pipe
 
-	def terminate(self, _=None):
+	def terminate(self, _):
 		self.pool = None
 		self.filtered.clear()
 		self.filtered = None
@@ -411,13 +453,16 @@ class DBChunk:
 		self.filtered.clear()
 		self.filtered.extend(saved_index)
 
+	def get_pool(self, _):
+		return list(self.pool)
+
 
 class DBChunkWorker:
 	"""
 		Controls a single DB chunk.
 		This is purely multiprocess.Process stuff.
 	"""
-	def __init__(self, db_records, prog_callback=None):
+	def __init__(self, db_records, prog_callback=None, db_type='ram'):
 		self.alive = True
 
 		# Function triggered once a worker made some progress
@@ -434,7 +479,7 @@ class DBChunkWorker:
 		# The worker proccess itself
 		self.worker_process = multiprocessing.Process(
 			target=create_db_chunk,
-			args=(db_records, cmd_pipe_a, prog_pipe_a,)
+			args=(db_type, db_records, cmd_pipe_a, prog_pipe_a,)
 		)
 		self.worker_process.start()
 
@@ -578,12 +623,15 @@ class ChunkedDB:
 		worker_amount=None,
 		prog_callback=None,
 		worker_init_callback=None,
+		db_type='ram'
 	):
 		self.filtered_index = []
 
 		self.worker_amount = worker_amount or math.floor(
 			(os.cpu_count() or 6) * max(self.CPU_USAGE_FACTOR, 0.1)
 		)
+
+		self.db_type = db_type
 
 		# An array containing all the worker classes
 		# self.chunks = list(map(
@@ -595,13 +643,23 @@ class ChunkedDB:
 		# ))
 
 		# The method above was replaced with this one to enable progress reporting
-		self.chunks = split_list(
-			db_records,
-			math.floor(len(db_records) / self.worker_amount)
-		)
+		if self.db_type == 'ram':
+			self.chunks = split_list(
+				db_records,
+				math.floor(len(db_records) / self.worker_amount)
+			)
+		else:
+			self.chunks = split_number(
+				db_records,
+				math.floor(db_records / self.worker_amount)
+			)
 
 		for i, chunk_data in enumerate(self.chunks):
-			self.chunks[i] = DBChunkWorker(chunk_data, prog_callback)
+			self.chunks[i] = DBChunkWorker(
+				chunk_data,
+				prog_callback,
+				self.db_type
+			)
 			if worker_init_callback:
 				worker_init_callback(
 					(i+1) / len(self.chunks)
@@ -653,7 +711,8 @@ class ChunkedDB:
 					'sorted': [
 						(i[0], self.chunks.index(i[1]),) for i in self.filtered_index
 					],
-					'extras': extras
+					'extras': extras,
+					'db_type': self.db_type,
 				},
 				tgt_file
 			)
@@ -681,6 +740,43 @@ class ChunkedDB:
 				fidx,
 				self.chunks[chunk_idx]
 			))
+
+	def convert_to_mapped_file(self, mfile_path):
+		if self.db_type == 'mfile':
+			return False
+
+		self.filtered_index.clear()
+
+		with MappedFileMaker(mfile_path) as mfile:
+			for chunk in self.chunks:
+				for record in chunk.get_pool():
+					mfile.add_block(record.encode())
+
+		self.terminate()
+
+		return True
+
+	def convert_to_ram(self, pickled_db_fpath):
+		if self.db_type == 'ram':
+			return False
+
+		self.filtered_index.clear()
+
+		records = []
+		for chunk in self.chunks:
+			for record in chunk.get_pool():
+				self.pool.append(record)
+
+		with open(pickled_db_fpath, 'wb') as tgt_file:
+			pickle.dump(
+				records,
+				tgt_file,
+				protocol=pickle.HIGHEST_PROTOCOL
+			)
+
+		self.terminate()
+
+		return True
 
 
 class QuickSortCriterias:
@@ -892,8 +988,8 @@ class FileWrapper:
 class GZCooker:
 	"""
 		Standartized gz util.
-		Made specifically to deal with https://fuck/filename.extension.gz and
-		nothing else.
+		Made specifically to deal with https://fuck.shit/filename.extension.gz
+		and nothing else.
 	"""
 	DL_CHUNK_SIZE = (1024**2)*32
 
@@ -1104,6 +1200,289 @@ class DLURLExtractor:
 		return self._date_based
 
 
+class MappedFileMaker:
+	def __init__(self, mfile_path):
+		self.mfile_path = Path(mfile_path)
+		self.fmap = []
+
+		self._mfile_buf = None
+
+	def __enter__(self):
+		self.mfile_path.unlink(missing_ok=True)
+		self.mfile_path.touch(exist_ok=True)
+		self.mfile_buf.write(b'\0'*8)
+		return self
+
+	def __exit__(self, type, value, traceback):
+		if not self._mfile_buf:
+			return
+
+		end_offs = self.mfile_buf.tell().to_bytes(8, 'little')
+
+		for offs, data_len in self.fmap:
+			self.mfile_buf.write(
+				offs.to_bytes(8, 'little')
+			)
+			self.mfile_buf.write(
+				data_len.to_bytes(4, 'little')
+			)
+
+		self.mfile_buf.seek(0, 0)
+		self.mfile_buf.write(end_offs)
+
+		self._mfile_buf.close()
+
+	@property
+	def mfile_buf(self):
+		if self._mfile_buf:
+			return self._mfile_buf
+
+		self._mfile_buf = open(self.mfile_path, 'wb')
+
+		return self._mfile_buf
+
+	def add_block(self, data:bytes):
+		# todo: is storing this in a variable faster than self. access ?
+		mfile_buf = self.mfile_buf
+		self.fmap.append((
+			# mfile_buf.tell().to_bytes(8, 'little'),
+			# len(data).to_bytes(4, 'little'),
+			mfile_buf.tell(),
+			len(data),
+		))
+		mfile_buf.write(data)
+
+
+class MappedFileReader:
+	def __init__(self, mfile_path, chunk_data=None, is_text=False):
+		self.mfile_path = Path(mfile_path)
+
+		self.tgt_offs, self.chunk_len = (
+			# chunk_data or (0, -1,)
+			chunk_data or (0, None,)
+		)
+
+		self.is_text = is_text
+
+		self._map_data_offs = None
+		self._mfile_buf = None
+		self._fmap = None
+		self._len = None
+
+		if chunk_data:
+			self._len = self.chunk_len
+
+	def __enter__(self):
+		return self
+
+	def __exit__(self, type, value, traceback):
+		self.close()
+
+	def close(self):
+		if self._mfile_buf:
+			self._mfile_buf.close()
+
+	@property
+	def mfile_buf(self):
+		if self._mfile_buf:
+			return self._mfile_buf
+		
+		self._mfile_buf = open(self.mfile_path, 'rb')
+		return self._mfile_buf
+
+	@property
+	def map_data_offs(self):
+		if self._map_data_offs:
+			return self._map_data_offs
+		
+		self.mfile_buf.seek(0, 0)
+
+		self._map_data_offs = int.from_bytes(
+			self.mfile_buf.read(8), 'little'
+		)
+
+		return self._map_data_offs
+
+	@property
+	def fmap(self):
+		if self._fmap:
+			return self._fmap
+
+		self._fmap = []
+
+		self.mfile_buf.seek(
+			self.map_data_offs + (self.tgt_offs*12),
+			0
+		)
+
+		i = 0
+		# while (i < self.chunk_len) if self.chunk_len else True:
+		while True:
+			if self.chunk_len and (self.chunk_len <= i):
+				break
+
+			if not (pointer := self.mfile_buf.read(12)):
+				break
+
+			self._fmap.append((
+				int.from_bytes(pointer[0:8], 'little'),
+				int.from_bytes(pointer[8:12], 'little'),
+			))
+
+			i += 1
+
+		self._fmap = tuple(self._fmap)
+
+		return self._fmap
+
+	def __len__(self):
+		if self._len:
+			return self._len
+
+		self._len = 0
+
+		self.mfile_buf.seek(self.map_data_offs, 0)
+
+		while self.mfile_buf.read(12):
+			self._len += 1
+
+		return self._len
+
+	def __getitem__(self, idx):
+		offs, block_size = self.fmap[idx]
+		self.mfile_buf.seek(offs, 0)
+		# todo: make this more efficient, such as writing down a function to use
+		if self.is_text:
+			return self.mfile_buf.read(block_size).decode()
+		else:
+			return self.mfile_buf.read(block_size)
+
+	def __iter__(self):
+		# for i in range(len(self.fmap)):
+		for i, _ in enumerate(self.fmap):
+			yield self[i]
+
+
+class _MappedFileReader:
+	def __init__(self, mfile_path, chunk_data=None, is_text=False):
+		self.mfile_path = Path(mfile_path)
+
+		self.tgt_offs, self.chunk_len = (
+			# chunk_data or (0, -1,)
+			chunk_data or (0, None,)
+		)
+
+		self.is_text = is_text
+
+		self._map_data_offs = None
+		self._mfile_buf = None
+		self._fmap = None
+		self._len = None
+
+		if chunk_data:
+			self._len = self.chunk_len
+
+	def __enter__(self):
+		return self
+
+	def __exit__(self, type, value, traceback):
+		self.close()
+
+	def close(self):
+		if self._mfile_buf:
+			self._mfile_buf.close()
+
+	@property
+	def mfile_buf(self):
+		if self._mfile_buf:
+			return self._mfile_buf
+		
+		self._mfile_buf = open(self.mfile_path, 'rb')
+		return self._mfile_buf
+
+	@property
+	def map_data_offs(self):
+		if self._map_data_offs:
+			return self._map_data_offs
+		
+		self.mfile_buf.seek(0, 0)
+
+		self._map_data_offs = int.from_bytes(
+			self.mfile_buf.read(8), 'little'
+		)
+
+		return self._map_data_offs
+
+	@property
+	def fmap(self):
+		if self._fmap:
+			return self._fmap
+
+		self._fmap = []
+
+		self.mfile_buf.seek(
+			self.map_data_offs + (self.tgt_offs*12),
+			0
+		)
+
+		i = 0
+		# while (i < self.chunk_len) if self.chunk_len else True:
+		while True:
+			if self.chunk_len and (self.chunk_len <= i):
+				break
+
+			if not (pointer := self.mfile_buf.read(12)):
+				break
+
+			self._fmap.append((
+				int.from_bytes(pointer[0:8], 'little'),
+				int.from_bytes(pointer[8:12], 'little'),
+			))
+
+			i += 1
+
+		self._fmap = tuple(self._fmap)
+
+		return self._fmap
+
+	def __len__(self):
+		if self._len:
+			return self._len
+
+		self._len = 0
+
+		self.mfile_buf.seek(self.map_data_offs, 0)
+
+		while self.mfile_buf.read(12):
+			self._len += 1
+
+		return self._len
+
+	def __getitem__(self, idx):
+		self.mfile_buf.seek(
+			self.map_data_offs + ((self.tgt_offs*12) + (idx*12)),
+			0
+		)
+		pointer = self.mfile_buf.read(12)
+		offs, block_size = (
+			int.from_bytes(pointer[0:8], 'little'),
+			int.from_bytes(pointer[8:12], 'little'),
+		)
+		# offs, block_size = self.fmap[idx]
+		self.mfile_buf.seek(offs, 0)
+		# todo: make this more efficient, such as writing down a function to use
+		if self.is_text:
+			return self.mfile_buf.read(block_size).decode()
+		else:
+			return self.mfile_buf.read(block_size)
+
+	def __iter__(self):
+		# for i in range(len(self.fmap)):
+		# for i, _ in enumerate(self.fmap):
+		for i in range(len(self)):
+			yield self[i]
+
+
 class DBCooker:
 	"""
 		DB Cooker.
@@ -1123,7 +1502,7 @@ class DBCooker:
 
 	CSV_FIELD_SIZE_LIMIT = (1024**2)*16
 
-	TEST_MODE = False
+	TEST_MODE = True
 	TEST_MODE_DL_URL = 'http://127.0.0.1:8000/posts-2024-12-10.csv.gz'
 
 	def __init__(
@@ -1132,7 +1511,8 @@ class DBCooker:
 		keep_cache=False,
 		preserve_details=False,
 		callbacks=None,
-		cached=True
+		cached=True,
+		db_type='ram'
 	):
 		# Base headers used to make HTTP requests to e621.
 		self.base_headers = {
@@ -1183,6 +1563,8 @@ class DBCooker:
 		self.force_redownload = force_redownload
 		# Whether to delete non-crucial DB columns.
 		self.preserve_details = preserve_details
+		# Database type
+		self.db_type = db_type
 
 	def __enter__(self):
 		return self
@@ -1204,7 +1586,7 @@ class DBCooker:
 		if not self.keep_cache:
 			DB_GZIP_CACHE_FPATH.unlink(missing_ok=True)
 
-		if self._cooked_db != None:
+		if (self._cooked_db != None) and (self.db_type == 'ram'):
 			self._cooked_db.clear()
 			self._cooked_db = None
 
@@ -1364,6 +1746,19 @@ class DBCooker:
 
 		return self._gz_unpacker_buf
 
+	def record_cooker(self, csv_reader):
+		for db_entry in csv_reader:
+			# Deleted and negatively rated posts are always skipped,
+			# because they're absolutely useless. Especially deleted ones...
+			if (db_entry[20] != 't') and not (db_entry[23].startswith('-')):
+				# Delete non-crucial fields
+				if not self.preserve_details:
+					for i, _ in enumerate(db_entry):
+						if not i in DB_STRUCT_PASS:
+							db_entry[i] = ''
+
+				yield SEP_CHAR.join(db_entry)
+
 	@property
 	def cooked_db(self):
 		if self._cooked_db:
@@ -1375,8 +1770,6 @@ class DBCooker:
 			dl_url = self.TEST_MODE_DL_URL
 		else:
 			dl_url = DB_DL_BASE_URL + self.download_url.date_based
-
-		# dl_url = self.TEST_MODE_DL_URL if self.TEST_MODE else (DB_DL_BASE_URL + self.download_url)
 
 		with GZCooker(dl_url, DB_GZIP_CACHE_FPATH, self.callbacks['cook']) as gz_cooker:
 			# Some posts have description the size of a fucking novel, while
@@ -1392,16 +1785,16 @@ class DBCooker:
 			# First line is column names. Not needed
 			next(reader)
 
-			for db_entry in reader:
-				# Deleted and negatively rated posts are always skipped,
-				# because they're absolutely useless. Especially deleted ones...
-				if (db_entry[20] != 't') and not (db_entry[23].startswith('-')):
-					# Delete non-crucial fields
-					if not self.preserve_details:
-						for i, _ in enumerate(db_entry):
-							if not i in DB_STRUCT_PASS:
-								db_entry[i] = ''
-					self._cooked_db.append(SEP_CHAR.join(db_entry))
+			if self.db_type == 'ram':
+				for record in self.record_cooker(reader):
+					self._cooked_db.append(record)
+
+			if self.db_type == 'mfile':
+				with MappedFileMaker(COOKED_MFILE_DB_FPATH) as mfile:
+					for record in self.record_cooker(reader):
+						mfile.add_block(record.encode())
+
+					self._cooked_db = len(mfile.fmap)
 
 		return self._cooked_db
 
@@ -1668,6 +2061,168 @@ def test():
 	sep()
 
 
+def test_as_mfile():
+	cbacks = {
+		'dl':   test_db_cooker_dl_callback,
+		'cook': test_db_cooker_cook_callback,
+	}
+
+	if not COOKED_DB_FPATH.is_file():
+		with DBCooker(True, False, callbacks=cbacks, db_type='mfile') as db_cooker:
+			with open(COOKED_DB_FPATH, 'wb') as tgt_file:
+				pickle.dump(
+					db_cooker.cooked_db,
+					tgt_file,
+					protocol=pickle.HIGHEST_PROTOCOL
+				)
+
+	with PerfTest('Loading Cooked DB:'):
+		with open(COOKED_DB_FPATH, 'rb') as tgt_file:
+			chunked_db = ChunkedDB(
+				pickle.load(tgt_file),
+				prog_callback=test_callback,
+				worker_init_callback=test_worker_init_callback,
+				db_type='mfile'
+			)
+
+	sep()
+
+	with PerfTest('Filtering:'):
+		chunked_db.run_filter()
+
+	sep()
+
+	print(
+		'id'.ljust(10),
+		'md5'.ljust(40),
+		'score'.ljust(40),
+	)
+	print()
+	with PerfTest('Getting post info:'):
+		print_first_page(chunked_db)
+
+	sep()
+
+	with PerfTest('QuickSort:'):
+		chunked_db.quick_sort.run(QuickSortCriterias.score_criteria)
+
+	sep()
+
+	with PerfTest('Getting post info after QuickSort:'):
+		print_first_page(chunked_db)
+
+	sep()
+
+	with PerfTest('Saving game:'):
+		chunked_db.save_state()
+
+	sep()
+
+	with PerfTest('Shuffling:'):
+		secrets.SystemRandom().shuffle(
+			chunked_db.filtered_index
+		)
+
+	sep()
+
+	with PerfTest('Getting post info after Shuffle:'):
+		print_first_page(chunked_db)
+
+	sep()
+
+	with PerfTest('Loading gamesave:'):
+		with open(GAMESAVE_FPATH, 'rb') as tgt_file:
+			chunked_db.apply_saved_state(
+				pickle.load(tgt_file)
+			)
+
+	sep()
+
+	with PerfTest('Getting post info after gamesave load:'):
+		print_first_page(chunked_db)
+
+	sep()
+
+	print('==== RND LOAD ====')
+
+	sep()
+
+	print('======== STATE A (SAVED) ========')
+	secrets.SystemRandom().shuffle(
+		chunked_db.filtered_index
+	)
+	print_first_page(chunked_db)
+	chunked_db.save_state()
+
+	sep()
+
+	print('======== STATE B ========')
+	secrets.SystemRandom().shuffle(
+		chunked_db.filtered_index
+	)
+	print_first_page(chunked_db)
+
+	sep()
+
+	print('======== LOAD STATE A ========')
+	with open(GAMESAVE_FPATH, 'rb') as tgt_file:
+		chunked_db.apply_saved_state(
+			pickle.load(tgt_file)
+		)
+	print_first_page(chunked_db)
+
+
+	sep()
+
+	# 5236226
+	print('======== ADDITIVE SORTING ========')
+	# chunked_db.quick_sort.run(QuickSortCriterias.oldest_criteria)
+	# print_first_page(chunked_db)
+
+	# return
+
+	# additive: aefb48a40aa19f2931d02dcab4165ac7 @ 4636
+	# non additive: 4cde67250fc2713af371fb5e497224c2 @ 4829
+	# chunked_db.quick_sort.run(QuickSortCriterias.newest_criteria)
+
+	chunked_db.quick_sort.run(QuickSortCriterias.score_criteria)
+	chunked_db.quick_sort.run(QuickSortCriterias.videos_criteria)
+
+	sep()
+
+	print_first_page(chunked_db)
+
+	freeze()
+
+	sep()
+
+	# return
+
+	# QuickSort order n shit
+	chunked_db.quick_sort.run(QuickSortCriterias.newest_criteria)
+	chunked_db.quick_sort.run(QuickSortCriterias.images_criteria)
+
+	print_first_page(chunked_db, len(chunked_db.filtered_index))
+
+	return
+
+	sep()
+
+	print_first_page(chunked_db)
+
+	sep()
+
+	print('Terminating...')
+
+	sep()
+
+	chunked_db.terminate()
+
+	print('Done Terminating everything...')
+
+	sep()
+
+
 def test_gz_cooker_callback(prog):
 	print('GZ prog:', prog)
 
@@ -1722,8 +2277,87 @@ def test_tags():
 	print(len(tag_cooker.cooked_tags))
 
 
+def test_cooker():
+	cbacks = {
+		'dl':   test_db_cooker_dl_callback,
+		'cook': test_db_cooker_cook_callback,
+	}
+
+	if not COOKED_DB_FPATH.is_file():
+		with DBCooker(True, False, callbacks=cbacks) as db_cooker:
+			with open(COOKED_DB_FPATH, 'wb') as tgt_file:
+				pickle.dump(
+					db_cooker.cooked_db,
+					tgt_file,
+					protocol=pickle.HIGHEST_PROTOCOL
+				)
+
+
+def create_sample_mfile_block(i='-1'):
+	buf = io.BytesIO()
+
+	buf.write(
+		str(i).encode()
+	)
+	buf.write('\0'.encode())
+	buf.write(
+		('!' + random.randbytes(15).hex() + '!').encode()
+	)
+	buf.write('\0'.encode())
+	buf.write(
+		random.randbytes(random.randrange(
+			# int(1541 / 2),
+			# int(2987 / 2)
+			int(10 / 2),
+			int(20 / 2)
+		)).hex().encode()
+	)
+
+	return buf.getvalue()
+
+
+def test_mapped_files():
+	mfile_test_fpath = CACHE_DIR / 'mfile_test.mf'
+	with MappedFileMaker(mfile_test_fpath) as mfile:
+		for i in range(12):
+			mfile.add_block(create_sample_mfile_block(i))
+
+	sep()
+	print('===== Read All =====')
+
+	mfile = MappedFileReader(mfile_test_fpath, is_text=True)
+	print('Evaluated length:', len(mfile))
+	for block in mfile:
+		# print(block)
+		data = block.split('\0')
+		print(
+			data[0].ljust(15),
+			data[1].ljust(40),
+			data[2][0:9].ljust(10),
+		)
+
+	sep()
+	print('===== Read Chunks =====')
+
+	for i in range(3):
+		print('Chunk', i)
+		mfile = MappedFileReader(
+			mfile_test_fpath,
+			(i*4, 4)
+		)
+		for block in mfile:
+			data = block.decode().split('\0')
+			print(
+				data[0].ljust(15),
+				data[1].ljust(40),
+				data[2][0:9].ljust(10),
+			)
+
+
 if __name__ == '__main__':
-	test()
+	# Old NVMe: filtering: 10283
+	test_as_mfile()
+	# test_mapped_files()
 
 
 	sep()
