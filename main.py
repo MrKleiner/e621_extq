@@ -146,6 +146,12 @@ def print_exception(err):
 	except Exception as e:
 		print(e)
 
+def print_wss_type():
+	try:
+		from xor_cipher import cyclic_xor
+		print('WSS v2')
+	except ImportError as e:
+		pass
 
 
 # ============================
@@ -263,7 +269,6 @@ class ProgressBars:
 
 
 class EXTQ:
-
 	CACHED_COOKING = False
 
 	ITEMS_PER_PAGE = 80
@@ -391,6 +396,7 @@ class EXTQ:
 		)
 
 		# Run websockets in a thread for easier manipulations
+		print_wss_type()
 		wss_thread = threading.Thread(
 			target=wss_server,
 			args=(wss_skt, self,)
@@ -623,6 +629,7 @@ class ReCooker:
 		# })
 
 		self.extq.progbars.update_text('Database cooked. Search enabled')
+
 
 class GameSave:
 	wss_cmd = 'save_game'

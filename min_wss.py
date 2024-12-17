@@ -4,7 +4,7 @@ import threading
 
 try:
 	from xor_cipher import cyclic_xor
-	print('WSS v2')
+	# print('WSS v2')
 except Exception as e:
 	cyclic_xor = None
 
